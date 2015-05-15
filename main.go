@@ -16,8 +16,10 @@ func main() {
 		"img/star.jpg",
 	}
 
-	_, err := imagestitcher.Combine(imagePaths, "img/sprite.png")
+	m, err := imagestitcher.Combine(imagePaths, "img/sprite.png")
 	if err != nil {
 		fmt.Println(err)
 	}
+
+	fmt.Println(m)
 }

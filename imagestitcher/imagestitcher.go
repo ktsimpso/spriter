@@ -36,14 +36,14 @@ func Combine(imagePaths []string, destination string) (map[string]image.Rectangl
 	destinationImage := image.NewRGBA(bounds)
 	currentMax := image.Point{0, 0}
 
-	for _, sourceImage := range images {
+	for index, sourceImage := range images {
 		drawRectangle := image.Rectangle{
 			currentMax,
 			currentMax.Add(sourceImage.Bounds().Size()),
 		}
 		draw.Draw(destinationImage, drawRectangle, sourceImage, sourceImage.Bounds().Min, draw.Src)
 		currentMax.Y += sourceImage.Bounds().Max.Y
-		//TODO: store the rect map I wanted later
+		m[imagePaths[index]] = drawRectangle
 	}
 
 	destinationFile, err := os.Create(destination)
