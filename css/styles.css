@@ -1,0 +1,25 @@
+/* */
+
+.apple {
+	background: url(../img/apple.png);
+}
+
+.drop {
+	background-image: url(../img/drop.png);
+}
+
+.settings {
+	/* This should not be sprited since css cusors do not support spriting */
+	cursor: url(../img/settings.png);
+}
+
+body {
+	background-image: url(../img/alien.jpg);
+	width: 100%;
+	height: auto;
+}
+
+.http {
+	/* Do not download web resources for spriting */
+	background: url(http://i.imgur.com/uhMq0Re.jpg);
+}
