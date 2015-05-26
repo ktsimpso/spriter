@@ -17,6 +17,7 @@ body {
 	background-image: url(../img/alien.jpg);
 	width: 100%;
 	height: auto;
+	/* background-image: url(../img/star.jpg); Don't parse comments */
 }
 
 .http {
