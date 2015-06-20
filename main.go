@@ -37,7 +37,7 @@ func main() {
 
 	css.AddSpriteToCss(t, "../img/sprite.png", m)
 
-	err = css.WriteToFile(t, "sprited.css")
+	err = t.WriteToFile("sprited.css")
 	if err != nil {
 		fmt.Println(err)
 	}

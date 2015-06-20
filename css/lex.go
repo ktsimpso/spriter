@@ -25,13 +25,15 @@ type lexer struct {
 	current    int
 	width      int
 	stateStack []stateFunction
-	items      chan item
+	items      chan *item
 }
 type stateFunction func(*lexer) stateFunction
 
+// golang.org/x/tools/cmd/stringer
 //go:generate stringer -type=itemType
 const (
 	itemError itemType = iota
+	itemRoot
 	itemSelector
 	itemComment
 	itemLeftBrace    // '{'
@@ -69,6 +71,10 @@ func init() {
 }
 
 func (lex *lexer) run() {
+	lex.items <- &item{
+		itemRoot,
+		"",
+	}
 	for state := lexSelector; state != nil; {
 		state = state(lex)
 	}
@@ -83,7 +89,7 @@ func (lex *lexer) emit(it itemType) {
 		return
 	}
 
-	lex.items <- item{
+	lex.items <- &item{
 		it,
 		value,
 	}

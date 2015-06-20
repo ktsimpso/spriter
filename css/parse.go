@@ -7,14 +7,14 @@ import (
 )
 
 type Tree struct {
-	currentItem item
-	children    []Tree
+	currentItem *item
+	children    []*Tree
 }
 
 func (t Tree) String() string {
 	s := ""
 
-	s += t.currentItem.value /*String()*/ + "\n"
+	s += t.currentItem.value + "\n"
 
 	for _, child := range t.children {
 		s += child.String()
@@ -29,7 +29,18 @@ var ignoredItems map[itemType]struct{} = map[itemType]struct{}{
 	itemComment:      struct{}{},
 }
 
-func WriteToFile(root []Tree, fileName string) error {
+var spacedItems map[itemType]struct{} = map[itemType]struct{}{
+	itemSeparator: struct{}{},
+	itemSelector: struct{}{},
+}
+
+var newLineItems map[itemType]struct{} = map[itemType]struct{}{
+	itemTerminator: struct{}{},
+	itemLeftBrace: struct{}{},
+	itemRightBrace: struct{}{},
+}
+
+func (root *Tree) WriteToFile (fileName string) error {
 	items := traverser(root)
 
 	cssFile, err := os.Create(fileName)
@@ -58,15 +69,17 @@ func WriteToFile(root []Tree, fileName string) error {
 			return err
 		}
 
-		if item.typ == itemSelector || item.typ == itemSeparator {
-			_, err := cssFile.WriteString(" ")
-			if err != nil {
-				return err
-			}
+		whiteSpace := ""
+		if _, ok:= spacedItems[item.typ]; ok {
+			whiteSpace += " "
 		}
 
-		if item.typ == itemTerminator || item.typ == itemLeftBrace || item.typ == itemRightBrace {
-			_, err := cssFile.WriteString("\n" + strings.Repeat("\t", indentationLevel))
+		if _, ok:= newLineItems[item.typ]; ok {
+			whiteSpace += "\n" + strings.Repeat("\t", indentationLevel)
+		}
+
+		if len(whiteSpace) > 0 {
+			_, err := cssFile.WriteString(whiteSpace)
 			if err != nil {
 				return err
 			}
@@ -76,8 +89,12 @@ func WriteToFile(root []Tree, fileName string) error {
 	return nil
 }
 
-func traverser(root []Tree) <-chan item {
-	items := make(chan item)
+func (tree *Tree) AddChildAtIndex(child *Tree, index int) {
+	tree.children = append(tree.children[:index], append([]*Tree{child}, tree.children[index:]...)...)
+}
+
+func traverser(root *Tree) <-chan *item {
+	items := make(chan *item)
 	go func() {
 		traverseTree(root, items)
 		close(items)
@@ -85,15 +102,34 @@ func traverser(root []Tree) <-chan item {
 	return items
 }
 
-func traverseTree(root []Tree, items chan item) {
-	for _, tree := range root {
-		items <- tree.currentItem
-		traverseTree(tree.children, items)
+func traverseTree(root *Tree, items chan *item) {
+	items <- root.currentItem
+	for _, child := range root.children {
+		traverseTree(child, items)
 	}
 }
 
-func parse(items chan item) ([]Tree, error) {
-	root := []Tree{}
+func parse(items chan *item) (*Tree, error) {
+	rootItem := <-items
+	if rootItem.typ != itemRoot {
+		return nil, fmt.Errorf("Expected root node got %s", rootItem)
+	}
+
+	children, err := parseRoot(items)
+	if err != nil {
+		return nil, err
+	}
+
+	root := &Tree{
+		currentItem: rootItem,
+		children: children,
+	}
+
+	return root, nil
+}
+
+func parseRoot(items chan *item) ([]*Tree, error) {
+	root := []*Tree{}
 
 	for item := range items {
 		if _, ok := ignoredItems[item.typ]; ok {
@@ -109,7 +145,7 @@ func parse(items chan item) ([]Tree, error) {
 			return nil, err
 		}
 
-		root = append(root, Tree{
+		root = append(root, &Tree{
 			currentItem: item,
 			children:    children,
 		})
@@ -118,23 +154,14 @@ func parse(items chan item) ([]Tree, error) {
 	return root, nil
 }
 
-func parseSelector(items chan item) ([]Tree, error) {
-	root := []Tree{}
+func parseSelector(items chan *item) ([]*Tree, error) {
+	root := []*Tree{}
 
-	for item := range items {
-		if _, ok := ignoredItems[item.typ]; ok {
-			continue
-		}
-
-		if item.typ != itemLeftBrace {
-			return nil, fmt.Errorf("Expected a LeftBrace got: %s", item)
-		}
-
-		root = append(root, Tree{
-			currentItem: item,
-		})
-		break
+	t, err := parseItemType(itemLeftBrace, items)
+	if err != nil {
+		return nil, err
 	}
+	root = append(root, t)
 
 	for item := range items {
 		if _, ok := ignoredItems[item.typ]; ok {
@@ -142,7 +169,7 @@ func parseSelector(items chan item) ([]Tree, error) {
 		}
 
 		if item.typ == itemRightBrace {
-			root = append(root, Tree{
+			root = append(root, &Tree{
 				currentItem: item,
 			})
 			break
@@ -157,7 +184,7 @@ func parseSelector(items chan item) ([]Tree, error) {
 			return nil, err
 		}
 
-		root = append(root, Tree{
+		root = append(root, &Tree{
 			currentItem: item,
 			children:    children,
 		})
@@ -166,53 +193,44 @@ func parseSelector(items chan item) ([]Tree, error) {
 	return root, nil
 }
 
-func parseProperty(items chan item) ([]Tree, error) {
-	root := []Tree{}
+func parseProperty(items chan *item) ([]*Tree, error) {
+	root := []*Tree{}
 
-	for item := range items {
-		if _, ok := ignoredItems[item.typ]; ok {
-			continue
-		}
-
-		if item.typ != itemSeparator {
-			return nil, fmt.Errorf("Expected Separator got: %s", item)
-		}
-
-		root = append(root, Tree{
-			currentItem: item,
-		})
-		break
+	t, err := parseItemType(itemSeparator, items)
+	if err != nil {
+		return nil, err
 	}
+	root = append(root, t)
 
-	for item := range items {
-		if _, ok := ignoredItems[item.typ]; ok {
-			continue
-		}
-
-		if item.typ != itemValue {
-			return nil, fmt.Errorf("Expected Value got: %s", item)
-		}
-
-		root = append(root, Tree{
-			currentItem: item,
-		})
-		break
+	t, err = parseItemType(itemValue, items)
+	if err != nil {
+		return nil, err
 	}
+	root = append(root, t)
 
-	for item := range items {
-		if _, ok := ignoredItems[item.typ]; ok {
-			continue
-		}
-
-		if item.typ != itemTerminator {
-			return nil, fmt.Errorf("Expected Terminator got: %s", item)
-		}
-
-		root = append(root, Tree{
-			currentItem: item,
-		})
-		break
+	t, err = parseItemType(itemTerminator, items)
+	if err != nil {
+		return nil, err
 	}
+	root = append(root, t)
 
 	return root, nil
+}
+
+func parseItemType(typ itemType, items chan *item) (*Tree, error) {
+	for item := range items {
+		if _, ok := ignoredItems[item.typ]; ok {
+			continue
+		}
+
+		if item.typ != typ {
+			return nil, fmt.Errorf("Expected: %s got: %s", typ, item)
+		}
+
+		return &Tree{
+			currentItem: item,
+		}, nil
+	}
+
+	return nil, fmt.Errorf("Expected: %s got: nil")
 }
