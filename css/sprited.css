@@ -1,0 +1,22 @@
+.apple {
+	background: url(../img/sprite.png);
+	background-position: 0px 0px;
+}
+.drop {
+	background-image: url(../img/sprite.png);
+	background-position: 0px 96px;
+}
+.settings {
+	cursor: url(../img/settings.png);
+}
+body {
+	background-image: url(../img/sprite.png);
+	background-position: 0px 224px;
+	width: 100%;
+	height: auto;
+}
+.http {
+	background: url(http://i.imgur.com/uhMq0Re.jpg);
+	padding: 10px 20px;
+	margin: 10px 20px;
+}

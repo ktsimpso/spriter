@@ -12,12 +12,13 @@ import (
 func main() {
 
 	cssFileName := "css/styles.css"
-	imagePaths, err := css.GetPaths(cssFileName)
+	t, err := css.GetParseTree(cssFileName)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
+	imagePaths := css.GetPaths(t)
 	fmt.Println(imagePaths)
 
 	err = os.Chdir(filepath.Dir(cssFileName))
@@ -33,4 +34,11 @@ func main() {
 	}
 
 	fmt.Println(m)
+
+	css.AddSpriteToCss(t, "../img/sprite.png", m)
+
+	err = css.WriteToFile(t, "sprited.css")
+	if err != nil {
+		fmt.Println(err)
+	}
 }

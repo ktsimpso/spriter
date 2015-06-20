@@ -160,10 +160,6 @@ func lexValue(lex *lexer) stateFunction {
 		if lex.peek(terminator) {
 			lex.emit(itemValue)
 			return lexTerminator
-		} else if lex.peek(commentStart) {
-			lex.emit(itemValue)
-			lex.stateStack = append(lex.stateStack, lexValue)
-			return lexCommentStart
 		}
 
 		if lex.next() == eof {
