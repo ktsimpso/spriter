@@ -22,6 +22,7 @@ body {
 
 .http {
 	/* Do not download web resources for spriting */
+	background: blue;
 	background: url(http://i.imgur.com/uhMq0Re.jpg);
 	padding: 10px 20px;
 	margin: 10px 20px;

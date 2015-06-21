@@ -40,21 +40,18 @@ func GetParseTree(fileName string) (*Tree, error) {
 
 func GetPaths(root *Tree) []string {
 	urls := []string{}
+	for property := range Filter(root, filterBackgroundProperties) {
+		currentValue := property.firstChild.nextSibling.currentItem
+		s := currentValue.value
 
-	for tree := root.firstChild; tree != nil; tree = tree.nextSibling {
-		if tree.currentItem.typ == itemSelector {
-			for property := tree.firstChild; property != nil; property = property.nextSibling {
-				if property.currentItem.typ == itemProperty && (property.currentItem.value == "background" || property.currentItem.value == "background-image") {
-					currentValue := property.firstChild.nextSibling.currentItem
-					s := currentValue.value
-					n := strings.Index(s, "url(")
-					url := s[n+4 : strings.Index(s[n:], ")")]
+		urlIndex := strings.Index(s, "url(")
+		if urlIndex == -1 {
+			continue
+		}
+		url := s[urlIndex+4 : strings.Index(s[urlIndex:], ")")]
 
-					if !strings.HasPrefix(url, "http") {
-						urls = append(urls, url)
-					}
-				}
-			}
+		if !strings.HasPrefix(url, "http") {
+			urls = append(urls, url)
 		}
 	}
 
@@ -62,25 +59,24 @@ func GetPaths(root *Tree) []string {
 }
 
 func AddSpriteToCss(root *Tree, spriteFileName string, urlMap map[string]image.Rectangle) {
-	for tree := root.firstChild; tree != nil; tree = tree.nextSibling {
-		if tree.currentItem.typ == itemSelector {
-			for property := tree.firstChild; property != nil; property = property.nextSibling {
-				if property.currentItem.typ == itemProperty && (property.currentItem.value == "background" || property.currentItem.value == "background-image") {
-					currentValue := property.firstChild.nextSibling.currentItem
-					s := currentValue.value
-					urlIndex := strings.Index(s, "url(")
-					endUrlIndex := strings.Index(s[urlIndex:], ")")
-					url := s[urlIndex+4 : endUrlIndex]
+	for property := range Filter(root, filterBackgroundProperties) {
+		currentValue := property.firstChild.nextSibling.currentItem
+		s := currentValue.value
 
-					if !strings.HasPrefix(url, "http") {
-						currentValue.value = s[:urlIndex+4] + spriteFileName + s[endUrlIndex:]
-						positionProperty := createProperty(
-							"background-position",
-							fmt.Sprintf("%dpx %dpx", urlMap[url].Min.X, urlMap[url].Min.Y))
-						property.addAfter(positionProperty)
-					}
-				}
-			}
+		urlIndex := strings.Index(s, "url(")
+		if urlIndex == -1 {
+			continue
+		}
+
+		endUrlIndex := strings.Index(s[urlIndex:], ")")
+		url := s[urlIndex+4 : endUrlIndex]
+
+		if !strings.HasPrefix(url, "http") {
+			currentValue.value = s[:urlIndex+4] + spriteFileName + s[endUrlIndex:]
+			positionProperty := createProperty(
+				"background-position",
+				fmt.Sprintf("%dpx %dpx", urlMap[url].Min.X, urlMap[url].Min.Y))
+			property.addAfter(positionProperty)
 		}
 	}
 }
@@ -107,4 +103,10 @@ func createProperty(property, value string) *Tree {
 	root.addChildren(children)
 
 	return root
+}
+
+func filterBackgroundProperties(tree *Tree) bool {
+	currentItem := tree.currentItem
+	return currentItem.typ == itemProperty &&
+		(currentItem.value == "background" || currentItem.value == "background-image")
 }

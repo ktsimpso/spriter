@@ -16,6 +16,7 @@ body {
 	height: auto;
 }
 .http {
+	background: blue;
 	background: url(http://i.imgur.com/uhMq0Re.jpg);
 	padding: 10px 20px;
 	margin: 10px 20px;

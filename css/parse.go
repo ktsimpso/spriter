@@ -155,6 +155,28 @@ var newLineItems map[itemType]struct{} = map[itemType]struct{}{
 	itemRightBrace: struct{}{},
 }
 
+// True stays in list
+type FilterFunc func(tree *Tree) bool
+
+func Filter(tree *Tree, filter FilterFunc) <-chan *Tree {
+	trees := make(chan *Tree)
+	go func() {
+		filterTree(tree, filter, trees)
+		close(trees)
+	}()
+	return trees
+}
+
+func filterTree(tree *Tree, filter FilterFunc, trees chan *Tree) {
+	if filter(tree) {
+		trees <- tree
+	}
+
+	for child := tree.firstChild; child != nil; child = child.nextSibling {
+		filterTree(child, filter, trees)
+	}
+}
+
 func traverser(root *Tree) <-chan *item {
 	items := make(chan *item)
 	go func() {
