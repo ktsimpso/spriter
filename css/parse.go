@@ -7,8 +7,11 @@ import (
 )
 
 type Tree struct {
-	currentItem *item
-	children    []*Tree
+	currentItem     *item
+	parent          *Tree
+	nextSibling     *Tree
+	previousSibling *Tree
+	firstChild      *Tree
 }
 
 func (t Tree) String() string {
@@ -16,31 +19,77 @@ func (t Tree) String() string {
 
 	s += t.currentItem.value + "\n"
 
-	for _, child := range t.children {
-		s += child.String()
+	for currentChild := t.firstChild; currentChild != nil; currentChild = currentChild.nextSibling {
+		s += currentChild.String()
 	}
 
 	return s
 }
 
-var ignoredItems map[itemType]struct{} = map[itemType]struct{}{
-	itemCommentStart: struct{}{},
-	itemCommentEnd:   struct{}{},
-	itemComment:      struct{}{},
+func newTree(currentItem *item) *Tree {
+	return &Tree{
+		currentItem:     currentItem,
+		parent:          nil,
+		nextSibling:     nil,
+		previousSibling: nil,
+		firstChild:      nil,
+	}
 }
 
-var spacedItems map[itemType]struct{} = map[itemType]struct{}{
-	itemSeparator: struct{}{},
-	itemSelector: struct{}{},
+func (tree *Tree) addAfter(newTree *Tree) {
+	newTree.parent = tree.parent
+	newTree.previousSibling = tree
+	newTree.nextSibling = tree.nextSibling
+
+	if newTree.nextSibling != nil {
+		newTree.nextSibling.previousSibling = newTree
+	}
+	tree.nextSibling = newTree
 }
 
-var newLineItems map[itemType]struct{} = map[itemType]struct{}{
-	itemTerminator: struct{}{},
-	itemLeftBrace: struct{}{},
-	itemRightBrace: struct{}{},
+func (tree *Tree) addBefore(newTree *Tree) {
+	newTree.parent = tree.parent
+	newTree.nextSibling = tree
+	newTree.previousSibling = tree.previousSibling
+
+	if newTree.previousSibling != nil {
+		newTree.previousSibling.nextSibling = newTree
+	} else if tree.parent != nil {
+		newTree.parent.firstChild = newTree
+	}
+	tree.previousSibling = newTree
 }
 
-func (root *Tree) WriteToFile (fileName string) error {
+func (tree *Tree) append(newTree *Tree) {
+	currentTree := tree
+	for currentTree.nextSibling != nil {
+		currentTree = currentTree.nextSibling
+	}
+
+	currentTree.addAfter(newTree)
+}
+
+func (tree *Tree) remove() {
+	if tree.previousSibling != nil {
+		tree.previousSibling.nextSibling = tree.nextSibling
+	} else if tree.parent != nil {
+		tree.parent.firstChild = tree.nextSibling
+	}
+
+	if tree.nextSibling != nil {
+		tree.nextSibling.previousSibling = tree.previousSibling
+	}
+}
+
+func (tree *Tree) addChildren(child *Tree) {
+	tree.firstChild = child
+	for child != nil {
+		child.parent = tree
+		child = child.nextSibling
+	}
+}
+
+func (root *Tree) WriteToFile(fileName string) error {
 	items := traverser(root)
 
 	cssFile, err := os.Create(fileName)
@@ -70,11 +119,11 @@ func (root *Tree) WriteToFile (fileName string) error {
 		}
 
 		whiteSpace := ""
-		if _, ok:= spacedItems[item.typ]; ok {
+		if _, ok := spacedItems[item.typ]; ok {
 			whiteSpace += " "
 		}
 
-		if _, ok:= newLineItems[item.typ]; ok {
+		if _, ok := newLineItems[item.typ]; ok {
 			whiteSpace += "\n" + strings.Repeat("\t", indentationLevel)
 		}
 
@@ -89,8 +138,21 @@ func (root *Tree) WriteToFile (fileName string) error {
 	return nil
 }
 
-func (tree *Tree) AddChildAtIndex(child *Tree, index int) {
-	tree.children = append(tree.children[:index], append([]*Tree{child}, tree.children[index:]...)...)
+var ignoredItems map[itemType]struct{} = map[itemType]struct{}{
+	itemCommentStart: struct{}{},
+	itemCommentEnd:   struct{}{},
+	itemComment:      struct{}{},
+}
+
+var spacedItems map[itemType]struct{} = map[itemType]struct{}{
+	itemSeparator: struct{}{},
+	itemSelector:  struct{}{},
+}
+
+var newLineItems map[itemType]struct{} = map[itemType]struct{}{
+	itemTerminator: struct{}{},
+	itemLeftBrace:  struct{}{},
+	itemRightBrace: struct{}{},
 }
 
 func traverser(root *Tree) <-chan *item {
@@ -104,8 +166,8 @@ func traverser(root *Tree) <-chan *item {
 
 func traverseTree(root *Tree, items chan *item) {
 	items <- root.currentItem
-	for _, child := range root.children {
-		traverseTree(child, items)
+	for currentChild := root.firstChild; currentChild != nil; currentChild = currentChild.nextSibling {
+		traverseTree(currentChild, items)
 	}
 }
 
@@ -115,21 +177,20 @@ func parse(items chan *item) (*Tree, error) {
 		return nil, fmt.Errorf("Expected root node got %s", rootItem)
 	}
 
-	children, err := parseRoot(items)
+	root := newTree(rootItem)
+
+	firstChild, err := parseRoot(items)
 	if err != nil {
 		return nil, err
 	}
 
-	root := &Tree{
-		currentItem: rootItem,
-		children: children,
-	}
+	root.addChildren(firstChild)
 
 	return root, nil
 }
 
-func parseRoot(items chan *item) ([]*Tree, error) {
-	root := []*Tree{}
+func parseRoot(items chan *item) (*Tree, error) {
+	var root *Tree = nil
 
 	for item := range items {
 		if _, ok := ignoredItems[item.typ]; ok {
@@ -140,28 +201,29 @@ func parseRoot(items chan *item) ([]*Tree, error) {
 			return nil, fmt.Errorf("Expected a Selector got: %s", item)
 		}
 
-		children, err := parseSelector(items)
+		currentTree := newTree(item)
+		if root == nil {
+			root = currentTree
+		} else {
+			root.append(currentTree)
+		}
+
+		firstChild, err := parseSelector(items)
 		if err != nil {
 			return nil, err
 		}
 
-		root = append(root, &Tree{
-			currentItem: item,
-			children:    children,
-		})
+		currentTree.addChildren(firstChild)
 	}
 
 	return root, nil
 }
 
-func parseSelector(items chan *item) ([]*Tree, error) {
-	root := []*Tree{}
-
-	t, err := parseItemType(itemLeftBrace, items)
+func parseSelector(items chan *item) (*Tree, error) {
+	root, err := parseItemType(itemLeftBrace, items)
 	if err != nil {
 		return nil, err
 	}
-	root = append(root, t)
 
 	for item := range items {
 		if _, ok := ignoredItems[item.typ]; ok {
@@ -169,50 +231,44 @@ func parseSelector(items chan *item) ([]*Tree, error) {
 		}
 
 		if item.typ == itemRightBrace {
-			root = append(root, &Tree{
-				currentItem: item,
-			})
-			break
+			root.append(newTree(item))
+			return root, nil
 		}
 
 		if item.typ != itemProperty {
 			return nil, fmt.Errorf("Expected a Property got: %s", item)
 		}
 
+		currentTree := newTree(item)
+		root.append(currentTree)
+
 		children, err := parseProperty(items)
 		if err != nil {
 			return nil, err
 		}
-
-		root = append(root, &Tree{
-			currentItem: item,
-			children:    children,
-		})
+		currentTree.addChildren(children)
 	}
 
-	return root, nil
+	return nil, fmt.Errorf("Expected a } but got: nil")
 }
 
-func parseProperty(items chan *item) ([]*Tree, error) {
-	root := []*Tree{}
-
-	t, err := parseItemType(itemSeparator, items)
+func parseProperty(items chan *item) (*Tree, error) {
+	root, err := parseItemType(itemSeparator, items)
 	if err != nil {
 		return nil, err
 	}
-	root = append(root, t)
 
-	t, err = parseItemType(itemValue, items)
+	t, err := parseItemType(itemValue, items)
 	if err != nil {
 		return nil, err
 	}
-	root = append(root, t)
+	root.append(t)
 
 	t, err = parseItemType(itemTerminator, items)
 	if err != nil {
 		return nil, err
 	}
-	root = append(root, t)
+	root.append(t)
 
 	return root, nil
 }
@@ -227,9 +283,7 @@ func parseItemType(typ itemType, items chan *item) (*Tree, error) {
 			return nil, fmt.Errorf("Expected: %s got: %s", typ, item)
 		}
 
-		return &Tree{
-			currentItem: item,
-		}, nil
+		return newTree(item), nil
 	}
 
 	return nil, fmt.Errorf("Expected: %s got: nil")

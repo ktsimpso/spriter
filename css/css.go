@@ -41,11 +41,11 @@ func GetParseTree(fileName string) (*Tree, error) {
 func GetPaths(root *Tree) []string {
 	urls := []string{}
 
-	for _, tree := range root.children {
+	for tree := root.firstChild; tree != nil; tree = tree.nextSibling {
 		if tree.currentItem.typ == itemSelector {
-			for _, property := range tree.children[1 : len(tree.children)-1] {
-				if property.currentItem.value == "background" || property.currentItem.value == "background-image" {
-					currentValue := property.children[1].currentItem
+			for property := tree.firstChild; property != nil; property = property.nextSibling {
+				if property.currentItem.typ == itemProperty && (property.currentItem.value == "background" || property.currentItem.value == "background-image") {
+					currentValue := property.firstChild.nextSibling.currentItem
 					s := currentValue.value
 					n := strings.Index(s, "url(")
 					url := s[n+4 : strings.Index(s[n:], ")")]
@@ -62,11 +62,11 @@ func GetPaths(root *Tree) []string {
 }
 
 func AddSpriteToCss(root *Tree, spriteFileName string, urlMap map[string]image.Rectangle) {
-	for _, tree := range root.children {
+	for tree := root.firstChild; tree != nil; tree = tree.nextSibling {
 		if tree.currentItem.typ == itemSelector {
-			for index, property := range tree.children {
+			for property := tree.firstChild; property != nil; property = property.nextSibling {
 				if property.currentItem.typ == itemProperty && (property.currentItem.value == "background" || property.currentItem.value == "background-image") {
-					currentValue := property.children[1].currentItem
+					currentValue := property.firstChild.nextSibling.currentItem
 					s := currentValue.value
 					urlIndex := strings.Index(s, "url(")
 					endUrlIndex := strings.Index(s[urlIndex:], ")")
@@ -77,7 +77,7 @@ func AddSpriteToCss(root *Tree, spriteFileName string, urlMap map[string]image.R
 						positionProperty := createProperty(
 							"background-position",
 							fmt.Sprintf("%dpx %dpx", urlMap[url].Min.X, urlMap[url].Min.Y))
-						tree.AddChildAtIndex(positionProperty, index+1)
+						property.addAfter(positionProperty)
 					}
 				}
 			}
@@ -86,30 +86,25 @@ func AddSpriteToCss(root *Tree, spriteFileName string, urlMap map[string]image.R
 }
 
 func createProperty(property, value string) *Tree {
-	return &Tree{
-		currentItem: &item{
-			typ: itemProperty,
-			value: property,
-		},
-		children: []*Tree{
-			&Tree{
-				currentItem: &item{
-					typ: itemSeparator,
-					value: separator,
-				},
-			},
-			&Tree{
-				currentItem: &item{
-					typ: itemValue,
-					value: value,
-				},
-			},
-			&Tree{
-				currentItem: &item{
-					typ: itemTerminator,
-					value: terminator,
-				},
-			},
-		},
-	}
+	root := newTree(&item{
+		typ:   itemProperty,
+		value: property,
+	})
+	children := newTree(&item{
+		typ:   itemSeparator,
+		value: separator,
+	})
+	children.addAfter(
+		newTree(&item{
+			typ:   itemValue,
+			value: value,
+		}))
+	children.append(
+		newTree(&item{
+			typ:   itemTerminator,
+			value: terminator,
+		}))
+	root.addChildren(children)
+
+	return root
 }
