@@ -75,7 +75,7 @@ func AddSpriteToCss(root *Tree, spriteFileName string, urlMap map[string]image.R
 			currentValue.value = s[:urlIndex+4] + spriteFileName + s[endUrlIndex:]
 			positionProperty := createProperty(
 				"background-position",
-				fmt.Sprintf("%dpx %dpx", urlMap[url].Min.X, urlMap[url].Min.Y))
+				fmt.Sprintf("%dpx %dpx", urlMap[url].Min.X, urlMap[url].Min.Y*-1))
 			property.addAfter(positionProperty)
 		}
 	}

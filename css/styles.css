@@ -2,19 +2,25 @@
 
 .apple {
 	background: url(../img/apple.png);
+	height: 96px;
+	width: 96px;
 }
 
 .drop {
 	background-image: url(../img/drop.png);
+	height: 128px;
+	width: 128px;
 }
 
 .settings {
 	/* This should not be sprited since css cusors do not support spriting */
-	cursor: url(../img/settings.png);
+	cursor: url(../img/settings.png), default;
+	background-color: white;
 }
 
 body {
 	background-image: url(../img/alien.jpg);
+	background-repeat: no-repeat;
 	width: 100%;
 	height: auto;
 	/* background-image: url(../img/star.jpg); /* Don't parse comments */
